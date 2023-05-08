@@ -1,0 +1,216 @@
+---
+title: "House_Stark_Network"
+author: "ADAMU Farida"
+date: "2023-04-23"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Analysing the House Stark main characters in the Game of Thrones Series 
+Game of Thrones is a popular TV show  where Nine noble families wage war against each other in order to gain control over the mythical land of Westeros. In this analysis, we focus on the major characters in House Stark - Arya, Jon and Sansa Stark. 
+
+
+```{r echo=FALSE, warning=FALSE, message=FALSE, results='hide'}
+library(igraph)
+library(dplyr)
+```
+
+
+```{r echo=FALSE, warning=FALSE, message=FALSE, results='hide'}
+### Read the data from external files
+got_nodes <- read.csv(file="got-nodes.csv")
+got_edges <- read.csv(file="got-edges.csv")
+```
+
+
+```{r echo=FALSE, warning=FALSE, message=FALSE, results='hide'}
+#subset the datarframe for only the main characters in House Stark 
+#We select only characters that made it to the very final episodes. 
+edges <- got_edges %>% filter(Source == "Arya" | 
+                                Source == "Jon" | 
+                                Source == "Sansa")
+```
+
+
+```{r echo=FALSE, warning=FALSE, message=FALSE, results='hide'}
+### Generate a network from the dataframes
+network <- graph.data.frame(edges,
+                           # vertices = got_nodes,
+                            directed=TRUE)
+is.igraph(network)
+```
+
+```{r echo=FALSE, warning=FALSE, message=FALSE, results='hide'}
+#information about the vertices
+V(network)
+
+#information about the edges or connections
+E(network)
+
+#labels
+V(network)$label <- V(network)$name
+V(network)$label
+
+#number of degrees
+V(network)$degree<- degree(network)
+V(network)$degree
+
+```
+
+
+First, we plot a histogram of the degree of the nodes in the network of these three characters. The degree of a node is the measure of how many neighbors it has in the network. 
+
+```{r echo=FALSE, warning=FALSE, message=FALSE}
+#histogram
+hist(V(network)$degree,
+     col = 'grey',
+     main = 'histogram of node dgree',
+     ylab = 'frequency',
+     xlab = 'degree of vertices')
+#the histagram shows us thre are more characters with smaller degrees
+#than with higher degrees in the game of thrones series.
+#there are few nodes with high connections and many notes with small connecyions
+```
+
+From the histogram  we see that there are few nodes with high connections(degrees) and many nodes with small connections. We will explore which of the characters has the most connections shortly, in the network analysis. 
+
+```{r echo=FALSE, warning=FALSE, message=FALSE}
+# Plot network with vertex labels
+plot(network, layout = layout.fruchterman.reingold,
+     vertex.size = V(network)$degree, 
+     vertex.label.dist= 0.5,
+     edge.arrow.size = 0.3,
+    vertex.label.cex = 0.5)
+```
+
+
+Robert is the most central node or point of connection between Arya, Jon and Sansa and this is very simple to explain because he is their father. However we see he has a very small node as he dies very early in the series. We also see that each of these characters despite being siblings their own interaction circles as they get seperated from one another after their dad was publicly executed.  Arya and Sansa have some characters they bothe interacted with at some point in the series, Cersei who was supposed to Sansa's mother-in-law and Bran who is their brother but also died early on in the series. 
+
+
+
+## Detecting Communities
+
+The Louvain Algorithm
+
+There’s a unique connection between Tyrion and Sansa even though they are both in different communities. This is because somewhere in the series, they begin to interact after Tyrion saves Sansa from a forced marriage. Sansa and Arya also have connections with Jon, but Jon seems to be isolated from both of them as the only connections between him and his sisters are with Robert. 
+```{r echo=FALSE, warning=FALSE, message=FALSE}
+## Communities according to the Louvain algorithm
+louvain <- cluster_louvain(as.undirected(network))
+plot(network, layout=layout.fruchterman.reingold,
+     vertex.size=4, vertex.label.dist=0.5,
+     vertex.color=membership(louvain),
+     edge.arrow.size=0.5)
+```
+
+### The Edge- Between Algorithm
+
+Sansa and Arya have more connections between them than Jon has with any of them. 
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE}
+
+##C Communities accroding to the edge-between. algorithm
+edge_between<-cluster_edge_betweenness(as.undirected(network))
+plot(network, layout=layout.fruchterman.reingold, vertex.size=4, 
+     vertex.label.dist=0.5, vertex.color=membership(edge_between), edge.arrow.size=0.5)
+```
+
+### Densely connected nodes
+
+Sansa has the strongest connections in the network and Jon has the weakest. In the end, this pays off for her as she becomes queen in the north. 
+
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE}
+# Community detection to detect densely connected nodes
+unet <- graph.data.frame(edges, directed = F)
+cnet <- cluster_edge_betweenness(network)
+plot(cnet,
+     unet,
+     vertex.size = V(network)$degree,
+     vertex.label.cex = 0.5,
+     vertex.label.dist=0.5, 
+    edge.arrow.size=0.3)
+```
+
+```{r echo=FALSE, warning=FALSE, message=FALSE}
+# Create a data frame with network statistics
+network_stats <- data.frame(
+  Nodes = vcount(network),
+  Edges = ecount(network),
+  MeanDegree = mean(degree(network, mode ="all")),
+  SDDegree = sd(degree(network, mode ="all")),
+  Isolates = sum(degree(network, mode ="all")==0),
+  AvgClustering = transitivity(network, type="global")
+)
+
+# View the network statistics table
+library(knitr)
+# Create a table with the network statistics
+kable(network_stats)
+
+```
+
+
+```{r echo=FALSE, warning=FALSE, message=FALSE, results='hide'}
+## Distances 
+diameter(network); mean_distance(network, directed=F)
+
+### Connectivity
+indegree<-degree(network, mode="in")
+outdegree<-degree(network, mode="out")
+degree <-degree(network, mode="all")
+
+reciprocity(network)
+
+```
+
+Distance; it takes about 2.45 (2.447843) steps to get from one node to another in the network graph
+
+Reciprocity; We have a reciprocity of 0 which means there are no mutual edges in the graph.
+
+```{r echo=FALSE, warning=FALSE, message=FALSE, results ='hide'}
+## Assortativity
+## ...using simple correlation coefficient
+es <-get.edges(network, E(network))
+deg<-degree(network, mode="all")
+assortativity= cor(deg[es[,1] ], deg[es[,2] ])
+```
+
+Assortativity;  We have an assortativity of  -0.08346024. This indicates that there is a slight tendency for nodes in the graph to connect to nodes with different attributes rather than nodes with similar attributes.
+
+
+```{r echo=FALSE, warning=FALSE, message=FALSE, results ='hide'}
+## Positioning:
+# Global centrality
+betweenness= betweenness(network, directed = FALSE)
+betweenness
+
+eigenvector.centrality= evcent(network)
+hist(eigenvector.centrality$vector)
+```
+
+Sansa has the highest score of 1.0,  making her the most important node in this network. Arya follows closely with 0.8404530 , then Jon, then others. 
+
+```{r echo=FALSE, warning=FALSE, message=FALSE, results ='hide'}
+# Local centrality
+outdegree= degree(network, mode="out")
+indegree= degree(network, mode="in")
+deg= degree(as.undirected(network))
+```
+
+
+```{r echo=FALSE, warning=FALSE, message=FALSE, results ='hide'}
+# Clustering coefficient
+clustering = transitivity(as.undirected(network), type="local")
+clustering
+```
+Clustering; Clustering is only detected between the three main characters, other characters they interact with outwardly never get to meet the other characters in-between them. 
+
+## References
+
+Data Source - https://github.com/melaniewalsh/sample-social-network-datasets/tree/master/sample-datasets/game-of-thrones
+
+Netwrok of Thrones Idea - https://www.maa.org/sites/default/files/pdf/Mathhorizons/NetworkofThrones%20%281%29.pdf
+
